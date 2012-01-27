@@ -1,0 +1,7 @@
+All code authored by Kunal Kandekar (unless specified otherwise.)
+Copyright 2001 - 2011
+
+License: Undecided as yet. If you find this code somehow, and want to use it for
+some insane reason, feel free to do so for non-commercial/private use, but 
+otherwise please contact me at kunalkandekar@gmail.com. I probably won't stop
+you from using it anyway, it's just that I am unsure of how to license it.
