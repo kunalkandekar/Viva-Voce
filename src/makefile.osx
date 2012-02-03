@@ -4,7 +4,8 @@
 
 #set env DYLD_INSERT_LIBRARIES /usr/lib/libgmalloc.dylib
 
-CFLAGS	= -g -Wall -O3 -m32 #-arch x86_64
+CFLAGS	= -Wall -O3 -m32 #-arch x86_64
+#CFLAGS	= -g -Wall -m32 #-arch x86_64
 SRC     = VivaVoce.cpp kodek.c UdpRW.cpp SyncQueue.cpp Thread.cpp ResourceManager.cpp AudioRW.cpp 
 OBJ     = $(SRC:.cpp=.o)
 CC	= gcc

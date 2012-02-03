@@ -3,3 +3,5 @@ ref/
 java/
 src/VivaVoce
 src/*.o
+src/stat*.csv
+src/*.dat

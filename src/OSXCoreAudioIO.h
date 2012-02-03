@@ -25,7 +25,7 @@ public:
     // Convenience function to dispose of our audio buffers
     int DestroyAudioBuffers();        
 
-    int ConfigureAudio(int nChannels, int sampleRate, int bitsPerSample, const char *nCoding);
+    int ConfigureAudio(int nChannels, int sampleRate, int bitsPerSample, const char *nCoding, int bufferSize);
     
     virtual int Start() = 0;
     virtual int Stop() = 0;

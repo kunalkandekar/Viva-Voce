@@ -4,7 +4,7 @@ Adapted from File:DCAudioFileRecorder.cpp
 
 #include "OSXCoreAudioIO.h"
 
-#define OSX_COREAUDIO_DEBUG 1
+#define OSX_COREAUDIO_DEBUG 0
 
 //Base class impl
 CoreAudioIOBase::CoreAudioIOBase() {
@@ -18,7 +18,7 @@ CoreAudioIOBase::CoreAudioIOBase() {
 CoreAudioIOBase::~CoreAudioIOBase() {
 }
 
-int CoreAudioIOBase::ConfigureAudio(int nChannels, int sampleRate, int bitsPerSample, const char *nCoding) {
+int CoreAudioIOBase::ConfigureAudio(int nChannels, int sampleRate, int bitsPerSample, const char *nCoding, int bufferSize) {
     // Twiddle the format to our liking
     mDataFormat.mSampleRate = sampleRate;
     mDataFormat.mChannelsPerFrame = nChannels;
@@ -72,7 +72,8 @@ int CoreAudioIOBase::ConfigureAudio(int nChannels, int sampleRate, int bitsPerSa
         mDataFormat.mFramesPerPacket = 1;
         mDataFormat.mBytesPerPacket = mDataFormat.mBytesPerFrame;
     }
-        return 0;
+    bufferByteSize = bufferSize;
+    return 0;
 }
 
 // Convenience function to dispose of our audio buffers
@@ -110,7 +111,7 @@ UInt32 CoreAudioInput::DeriveIPBufferSize ( AudioQueueRef                audioQu
                                             AudioStreamBasicDescription  &ASBDescription,
                                             Float64                      seconds,
                                             UInt32                       *outBufferSize) {
-    static const int maxBufferSize = 0x50000;
+    static const int maxBufferSize = 0x400;
  
     int maxPacketSize = ASBDescription.mBytesPerPacket;
     if (maxPacketSize == 0) {
@@ -157,6 +158,7 @@ void CoreAudioInput::HandleInputBuffer( void                                *aqD
         }
         else {
             //error, stop
+            perror("write");
 		    if (OSX_COREAUDIO_DEBUG) { printf("\n\tHandleInputBuffer wrote %d bytes", bytesWrit); fflush(stdout); }         
             pAqData->mIsRunning = false;
             break;
@@ -196,7 +198,7 @@ int CoreAudioInput::Start() {
     //Get buffer size for configured audio
     DeriveIPBufferSize( mQueue,
                         mDataFormat,
-                        0.5,
+                        (bufferByteSize / (mDataFormat.mSampleRate * mDataFormat.mBytesPerFrame)),
                         &bufferByteSize);
 
     //allocate and enqueue
@@ -216,9 +218,9 @@ int CoreAudioInput::Start() {
     
 int CoreAudioInput::Stop() {
     // Stop pulling audio data
-    AudioQueueStop (mQueue, true);
+    AudioQueueStop (mQueue, false);
     
-    AudioQueueDispose (mQueue, true);
+    AudioQueueDispose (mQueue, false);
     
     mIsRunning     = false;
     fprintf(stderr, "Recording stopped.\n");
@@ -243,27 +245,22 @@ UInt32 CoreAudioOutput::DeriveOPBufferSize( AudioStreamBasicDescription &ASBDesc
                                             Float64                     seconds,
                                             UInt32                      *outBufferSize,
                                             UInt32                      *outNumPacketsToRead) {
-    static const UInt32 maxBufferSize = 0x50000;
-    static const UInt32 minBufferSize = 0x4000;
+    static const UInt32 maxBufferSize = 0x400;  //keep it small for low latency
+    static const UInt32 minBufferSize = 0x080;
  
     if (ASBDesc.mFramesPerPacket != 0) {
-        Float64 numPacketsForTime =
-            ASBDesc.mSampleRate / ASBDesc.mFramesPerPacket * seconds;
+        Float64 numPacketsForTime = (ASBDesc.mSampleRate / ASBDesc.mFramesPerPacket) * seconds;
         *outBufferSize = numPacketsForTime * maxPacketSize;
-    } else {
-        *outBufferSize =
-            maxBufferSize > maxPacketSize ?
-                maxBufferSize : maxPacketSize;
+    } 
+    else {
+        *outBufferSize = maxBufferSize > maxPacketSize ? maxBufferSize : maxPacketSize;
     }
  
-    if (
-        *outBufferSize > maxBufferSize &&
-        *outBufferSize > maxPacketSize
-    )
+    if ((*outBufferSize > maxBufferSize) && (*outBufferSize > maxPacketSize)) {
         *outBufferSize = maxBufferSize;
-    else {
-        if (*outBufferSize < minBufferSize)
-            *outBufferSize = minBufferSize;
+    }
+    else if (*outBufferSize < minBufferSize) {
+        *outBufferSize = minBufferSize;
     }
  
     *outNumPacketsToRead = *outBufferSize / maxPacketSize;
@@ -275,11 +272,11 @@ void CoreAudioOutput::HandleOutputBuffer(void                *aqData,
                                         AudioQueueRef        inAQ,
                                         AudioQueueBufferRef  inBuffer) {
     CoreAudioOutput *pAqData = (CoreAudioOutput *) aqData;
-    if (OSX_COREAUDIO_DEBUG) { printf("\n\tHandleOutputBuffer: isRunning  %d ", pAqData->mIsRunning); fflush(stdout); }
+    //if (OSX_COREAUDIO_DEBUG) { printf("\n\tHandleOutputBuffer: isRunning  %d ", pAqData->mIsRunning); fflush(stdout); }
     //if (pAqData->mIsRunning == 0) return;
 
     UInt32 numBytesReadFromFile = 0;
-    UInt32 remaining = pAqData->bufferByteSize;
+    UInt32 remaining = inBuffer->mAudioDataBytesCapacity;    //pAqData->bufferByteSize;
 
     //read from pipe into buffer
     while (remaining > 0) {
@@ -289,19 +286,20 @@ void CoreAudioOutput::HandleOutputBuffer(void                *aqData,
             pAqData->mCurrentByte += bytesRead;
         }
         else if (bytesRead == 0) {  //no data, something wrong?
-		    if (OSX_COREAUDIO_DEBUG) { printf("\n\tHandleOutputBuffer read 0 bytes"); fflush(stdout); }
+		    if (OSX_COREAUDIO_DEBUG) { printf(" -  read 0 bytes"); fflush(stdout); }
             break;
         }
         else {
             //error, stop
-		    if (OSX_COREAUDIO_DEBUG) { printf("\n\tHandleOutputBuffer read %d bytes", bytesRead); fflush(stdout); }
+		    if (OSX_COREAUDIO_DEBUG) { printf(" -  read %d bytes", bytesRead); fflush(stdout); }
             pAqData->mIsRunning = false;
             break;
         }
         remaining -= bytesRead;
         numBytesReadFromFile += bytesRead;
+        if (OSX_COREAUDIO_DEBUG) { printf(" read=%u total=%u remaining=%u bytes", bytesRead, numBytesReadFromFile, remaining); fflush(stdout); }        
     }
-    if (OSX_COREAUDIO_DEBUG) { printf("\n\tHandleOutputBuffer read %d bytes", numBytesReadFromFile); fflush(stdout); }        
+
     if (numBytesReadFromFile > 0) {
         inBuffer->mAudioDataByteSize = numBytesReadFromFile;
         AudioQueueEnqueueBuffer(pAqData->mQueue,
@@ -333,9 +331,9 @@ int CoreAudioOutput::Stop() {
     mIsRunning     = false;
 
     // Stop pulling audio data
-    AudioQueueStop (mQueue, true);
+    AudioQueueStop (mQueue, false);
     
-    AudioQueueDispose (mQueue, true);
+    AudioQueueDispose (mQueue, false);
     
     fprintf(stderr, "Playback stopped.\n");
     return 0;
@@ -357,8 +355,8 @@ void* CoreAudioOutput::run(void *arg) {
 
     //Get buffer size for configured audio
     DeriveOPBufferSize( mDataFormat,
-                        0x4000,
-                        0.5,
+                        1,
+                        (bufferByteSize / (mDataFormat.mSampleRate * mDataFormat.mBytesPerFrame)),
                         &bufferByteSize,
                         &mNumPacketsToRead);
 
@@ -387,17 +385,11 @@ void* CoreAudioOutput::run(void *arg) {
 
     
     do {
-        CFRunLoopRunInMode (
-            kCFRunLoopDefaultMode,
-            0.25,
-            false);
+        CFRunLoopRunInMode (kCFRunLoopDefaultMode, 0.20, false);
     } while (mIsRunning);
      
-    CFRunLoopRunInMode (
-        kCFRunLoopDefaultMode,
-        1,
-        false
-    );
+
+    CFRunLoopRunInMode (kCFRunLoopDefaultMode, 0.2, false);
     
     return NULL;
 }

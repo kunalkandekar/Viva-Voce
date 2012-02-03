@@ -6,14 +6,18 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "AudioRW.h"
+#include <math.h>
 
+#define PI 3.14159265
+
+#include "AudioRW.h"
+#include "ulaw.h"
 
 #if defined (__SVR4) && defined (__sun) && !defined(SOLARIS)
 #define SOLARIS 1
 #endif
 
-/* ---- LINUX-specific implementation ---- */
+/**************************** LINUX-specific implementation ****************************/
 #ifdef __linux__
 #include <stropts.h>
 #include <sys/soundcard.h>
@@ -136,7 +140,7 @@ int openAudioInput(Common* common) {
     return 0;
 }
 
-int initAudio(Common* common) {
+int initAudioLinux(Common* common) {
 	//open i/p and o/p files
 	if(openAudioInput(common) < 0) {
 		perror ("\n\tError opening AUDIO_DEV for input");
@@ -167,7 +171,7 @@ int closeAudioOutput(Common* common) {
 }
 #endif
 
-/* OSX-specific implementation */
+/**************************** OSX-specific implementation ****************************/
 #ifdef __APPLE__
 #include "OSXCoreAudioIO.h"
 
@@ -181,26 +185,19 @@ public:
     CoreAudioOutput *coreao;
 };
 
-int openAudioInput(Common *common) {
-    CoreAudioInput *coreai = ((CoreAudioInterface*)common->ai)->coreai;
-    if ((coreai == NULL) || (coreai->Start() < 0)) {
-        return -1;
-    }
-    return 0;
-}
-
 int closeAudioInput(Common *common) {
     CoreAudioInput *coreai = ((CoreAudioInterface*)common->ai)->coreai;
-    if (coreai)
+    if(coreai)
         delete coreai;
-    ((CoreAudioInterface*)common->ai)->coreao  = NULL;
+    ((CoreAudioInterface*)common->ai)->coreai  = NULL;
     close(common->audio_ip);
+    common->audio_ip = -1;
     return 0;
 }
 
-int initAudioInput(Common *common) {
-    //open pipe for inter-thread communication
-    //not the best, but easiest to integrate with the AudioRW code
+int openAudioInput(Common *common) {
+    //open pipe for inter-thread communication... not the best, but easiest to 
+    //integrate with the other AudioRW code that treats Audio devices as files
     int fd[2];
     if(pipe(fd) < 0) {
         return -1;
@@ -210,21 +207,21 @@ int initAudioInput(Common *common) {
     CoreAudioInput *coreai = new CoreAudioInput(fd[1]);
     ((CoreAudioInterface*)common->ai)->coreai = coreai;
     if(coreai->ConfigureAudio(common->nChannels, common->sampleRate, 
-                            common->precision, common->nCoding) < 0) {
+                            common->precision, common->nCoding, common->bytesPerCapture) < 0) {
         //error
         closeAudioInput(common);
         return -1;
     }
-    //need same for audio output
+    
+    //CoreAudioInput *coreai = ((CoreAudioInterface*)common->ai)->coreai;
+    if(coreai->Start() < 0) {
+        return -1;
+    }
     return 0;
 }
 
-int openAudioOutput(Common* common) {
-	//open audio o/p
-    CoreAudioOutput *coreao = ((CoreAudioInterface*)common->ai)->coreao;
-    if ((coreao == NULL) || (coreao->Start() < 0)) {
-        return -1;
-    }
+int initAudioInput(Common *common) {
+    //need same for audio output
     return 0;
 }
 
@@ -236,10 +233,11 @@ int closeAudioOutput(Common* common) {
     }
     ((CoreAudioInterface*)common->ai)->coreao  = NULL;
     close(common->audio_op);
+    common->audio_op = -1;    
     return 0;
 }
 
-int initAudioOutput(Common *common) {    
+int openAudioOutput(Common* common) {
     //open pipe for inter-thread communication
     //not the best, but easiest to integrate with the AudioRW code
     int fd[2];
@@ -251,17 +249,26 @@ int initAudioOutput(Common *common) {
     CoreAudioOutput *coreao = new CoreAudioOutput(fd[0]);
     ((CoreAudioInterface*)common->ai)->coreao = coreao;
     if(coreao->ConfigureAudio(common->nChannels, common->sampleRate, 
-                            common->precision, common->nCoding) < 0) {
+                            common->precision, common->nCoding, common->bytesPerCapture) < 0) {
         //error
         closeAudioOutput(common);
         return -1;
     }
 
+	//open audio o/p
+    //CoreAudioOutput *coreao = ((CoreAudioInterface*)common->ai)->coreao;
+    if (coreao->Start() < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+int initAudioOutput(Common *common) {    
     //need same for audio output
     return 0;
 }
 
-int initAudio(Common *common) {
+int initAudioOSX(Common *common) {
     if (common->ai == NULL) {
         common->ai = new CoreAudioInterface();
     }
@@ -279,7 +286,7 @@ int initAudio(Common *common) {
 
 #endif 
 
-/* SOLARIS-specific implementation */
+/**************************** SOLARIS-specific implementation ****************************/
 #ifdef SOLARIS
 #define AUDIO_DEV "/dev/audio"
 #define AUDIO_CTL "/dev/audioctl"
@@ -300,7 +307,7 @@ int closeAudioCtl(Common* common) {
 	return 0;
 }
 
-int initAudio(Common* common) {
+int initAudioSolaris(Common* common) {
 	common->ai = (struct audio_info *) malloc (sizeof (struct audio_info));
 	struct audio_info *common_ai = (struct audio_info *)common->ai;
 
@@ -378,7 +385,26 @@ int closeAudioOutput(Common* common) {
 }
 #endif
 
+//TODO: Separate out OS-specific stuff into separate files, maybe refactor into class hierarchy
+//E.g. audiorw_linux.cpp, audiorw_osx.cpp etc. or AudioIO -> LinuxAudioIO, OSXCoreAudioIO, etc. 
+int initAudio(Common *common) {
+    int ret = 0;
+#ifdef SOLARIS
+    ret = initAudioSolaris(common);
+#elif defined __linux__
+    ret = initAudioLinux(common);
+#elif defined __APPLE__
+    ret = initAudioOSX(common);
+#elif defined _WIN32 || defined _WIN64
+    //initAudioWin(common);
+    #error "Windows is currently not a supported platform"
+#else
+    #error "Unsupported platform"
+#endif
+    return ret;
+}
 
+/* OS-neutral stuff */
 AudioReader::AudioReader(Common* common):Thread(1, 0, common) {
 
 }
@@ -397,9 +423,19 @@ void* AudioReader::run(void* arg) {
 	Memo	*memo;
 	long	len = common->samplesPerCapture;		//u-Law
 
-	struct timeval* timeout = new timeval();
+	struct timeval timeout;
 	int 	max;
 	int 	done=0;
+
+    static unsigned char sinewave[161];    //for a given sample rate of 8K
+    static short sinepcm[161];
+    float r = 8000;
+    float a = 256 * 64;
+    float f = (8000/23);
+    for (unsigned int n = 0; n < sizeof(sinewave); n++) {
+        sinepcm[n] = (int)(a * sin((2 * PI * n * f) / r));
+    }
+    linear2ulaw(sinepcm, sinewave, sizeof(sinewave));
 
 	while(common->go) {
 		wait(VIVOCE_WAIT_MSEC);
@@ -414,23 +450,23 @@ void* AudioReader::run(void* arg) {
 			while(common->isConnected  || common->audioGo) {
 				FD_ZERO(&readSet);
 				FD_SET(common->audio_ip, &readSet);
-				timeout->tv_sec	 = 0;			// time out = 50 msec
-				timeout->tv_usec = 20000;
+				timeout.tv_sec	= 0;			// time out = 50 msec
+				timeout.tv_usec = 20000;
 
-				nFound= select(max, &readSet, NULL, NULL, timeout);
+				nFound = select(max, &readSet, NULL, NULL, &timeout);
 
 				if(nFound==0) {
 					//timed out
 					continue;
 				}
 				if(nFound < 0) {
-					perror("\n\tError in reading audio:");
+					perror("\n\tError in reading audio - select");
 					continue;
 				}
 				nFound = FD_ISSET(common->audio_ip, &readSet);
 				if(nFound < 0) {
 					//error !!
-					perror("\n\tError in reading audio:");
+					perror("\n\tError in reading audio - FD_ISSET");
 					continue;
 				}
 				if(nFound>0) {
@@ -445,6 +481,12 @@ void* AudioReader::run(void* arg) {
 									len-done);
 						done+=ret;
 					}
+					
+					if(common->audioGenTone) { //replace with sine
+                        memcpy(memo->bytes, sinewave, sizeof(sinewave));
+                        done = sizeof(sinewave);
+					}
+					
 				    //if (VIVAVOCE_DEBUG) { printf("\n\tread %d bytes", done); fflush(stdout); }
 					memo->data1=done;
 					common->unitsRec++;
@@ -462,7 +504,6 @@ void* AudioReader::run(void* arg) {
 			common->audrSig=0;
 		}
 	}
-	delete timeout;
 	printf("AudioReader stopped. "); fflush(stdout);
 	return NULL;
 }
@@ -482,49 +523,74 @@ void* AudioWriter::run(void* arg) {
 	int size;
 	int buf;
 	int len;
-    if (openAudioOutput(common) < 0) {
-        perror ("\n\tError opening AUDIO_DEV for output");
-        printf("AudioWriter breaking early\n"); fflush(stdout);
-		return NULL;
-    }
-    
-	setBlocking(common->audio_op, 1);
-
+	static char golden[169];  //ooh that's deep
+		
 	while(common->go) {
-		memo = (Memo*)common->playQ->waitForData(20);
-		if(memo != NULL) {
-			switch(memo->code) {
-				case VIVOCE_MSG_PLAY:		//data from Q
-					buf=0;
-					len = memo->data1;
-					while (1) {
-						size = write(common->audio_op, memo->bytes+buf, len);
-						
-						if (size < len) 	// Success, but not done writing
-						{
-							buf += size;	// Move write pointer up
-							len -= size;	// Decrement count
-						}
-						else
-							break;		// All written, exit
-					}
-					common->unitsPld++;
-					break;
+        if(!common->isConnected && !common->audioGo) {
+		    //drop any memos if we're not playing audio
+		    memo = (Memo*)common->playQ->waitForData(20);
+		    if(memo && (memo->code == VIVOCE_RESPOND)) {
+                printf("\n\tAudio Writer active"); fflush(stdout);
+		    }
+            common->rmg->releaseMemo(memo);
+            continue;
+        }
+        
+	    if(openAudioOutput(common) < 0) {
+	      	perror ("\n\tError opening AUDIO_DEV for output");
+            printf("AudioWriter breaking early\n"); fflush(stdout);
+	        return NULL;
+	    }
 
-				case VIVOCE_RESPOND:
-					printf("\n\tAudio Writer active"); fflush(stdout);
-					//common->rmg->releaseMemo(memo);
-					break;
-				default:
-					break;
-			}
-			common->rmg->releaseMemo(memo);
+		setBlocking(common->audio_op, 1);
+
+		while(common->isConnected  || common->audioGo) {
+    		memo = (Memo*)common->playQ->waitForData(20);
+    		if(memo != NULL) {
+    			switch(memo->code) {
+    				case VIVOCE_MSG_PLAY:		//data from Q
+                        buf=0;
+    					len = memo->data1;
+    					if(common->audioMute) {
+    					   size = write(common->audio_op, golden, sizeof(golden));
+    					}
+    					else while (1) {
+    						size = write(common->audio_op, memo->bytes+buf, len);
+    
+    						if (size < 0) { 
+                                //error, break
+                                perror("write");
+                                break;
+    						}
+    						else if(size == 0) {
+                                //maybe some problem
+                                //printf("\n\tAudio Writer wrote 0...");
+                                break;
+    						}
+    						else if(size < len) {
+    							buf += size;	// Move write pointer up
+    							len -= size;	// Decrement count
+    						}
+    						else
+    							break;		// All written, exit
+    					}
+    					common->unitsPld++;
+    					break;
+    
+    				case VIVOCE_RESPOND:
+    					printf("\n\tAudio Writer active"); fflush(stdout);
+    					break;
+    				default:
+    					break;
+    			}
+    			common->rmg->releaseMemo(memo);
+    		}
+    		else {
+    		    //printf("\nno memo, qsize = %d", common->playQ->count()); fflush(stdout);
+    		}
 		}
-		else {
-		    //printf("\nno memo, qsize = %d", common->playQ->count()); fflush(stdout);
-		}
+		closeAudioOutput(common);
 	}
-	closeAudioOutput(common);
 	printf("AudioWriter stopped."); fflush(stdout);
 	return NULL;
 }

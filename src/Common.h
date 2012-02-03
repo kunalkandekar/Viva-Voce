@@ -163,6 +163,8 @@ public:
 
 	int				go;
 	int				audioGo;
+	int				audioMute;
+	int				audioGenTone;	
 	int             codecStop;
 	struct timeval 	currtime;
 };

@@ -10,7 +10,7 @@ class AdpcmCodec;
 
 class AudioIOTest : public Thread {
 public:
-    AudioIOTest(Common *common, AudioReader *reader, AudioWriter *writer, AdpcmCodec *codec, bool testCodec);
+    AudioIOTest(Common *common, AudioReader *reader, AudioWriter *writer, AdpcmCodec *codec, bool testCodec, int f);
     
     virtual ~AudioIOTest();
     
@@ -19,6 +19,7 @@ public:
     AdpcmCodec  *audioCodec;
     bool running;
     bool testCodec;
+    int  flags;
     
     void* run(void *arg);
 };

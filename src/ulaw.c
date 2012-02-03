@@ -69,7 +69,7 @@ static int exp_lut_inv[8] = {0,132,396,924,1980,4092,8316,16764};
 ** Output: 8 bit ulaw sample
 */
 
-int linear2ulaw(int* samples, unsigned char* ulawbytes, int nSamples) {
+int linear2ulaw(short int* samples, unsigned char* ulawbytes, int nSamples) {
 	int sign;
 	int exponent;
 	int mantissa;
@@ -123,7 +123,7 @@ int ulaw2linear( unsigned char* ulawbytes, int* samples, int nSamples) {
 	int itr;
 	unsigned char ulawbyte;
 	for(itr=0; itr<nSamples; itr++) {
-		ulawbyte=ulawbytes[nSamples];
+		ulawbyte=ulawbytes[itr];
 		ulawbyte = ~ulawbyte;
 		sign = (ulawbyte & 0x80);
 		exponent = (ulawbyte >> 4) & 0x07;

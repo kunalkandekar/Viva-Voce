@@ -226,26 +226,57 @@ int VivaVoce::run(void) {
 			common->audrSig=1;
 			common->udprSig=1;
 		}
-		else if((strncmp("t", cmd, 2)==0) || (strncmp("testaudio", cmd, 6)==0)) {
-		    if (audioTest == NULL) {
-		        line = strtok_r(cmd, " ", &ptr);
-		        line = strtok_r(NULL, " ", &ptr);
-		        if (line) {
-		            printf("Audio test with codec...\n"); fflush(stdout);
-                    audioTest = new AudioIOTest(common, audioReader, audioWriter, adpcmCodec, true);
-		        }
-		        else {
-		            printf("Audio test without codec...\n"); fflush(stdout);
-		            audioTest = new AudioIOTest(common, audioReader, audioWriter, adpcmCodec, false);
-		        }
+		else if((strncmp("t", cmd, 1)==0) || (strncmp("testaudio", cmd, 6)==0)) {
+		    if(common->isConnected) {
+		        printf("In a call right now, can't run test...\n"); fflush(stdout);
 		    }
-            if (audioTest->running) {
-                audioTest->running = false;
+		    else {
+                if (audioTest == NULL) {
+                    char *flag = NULL;
+                    int f = 0;
+    		        line = strtok_r(cmd, " ", &ptr);
+    		        line = strtok_r(NULL, " ", &ptr);
+    		        if(ptr) {
+                        flag = strtok_r(NULL, " ", &ptr);
+                        if(flag) f = atoi(flag);
+    		        }
+    		        if (line && strncmp("c", line, 1) == 0) {
+    		            printf("Audio test with codec, flags=%d...\n", f); fflush(stdout);
+                        audioTest = new AudioIOTest(common, audioReader, audioWriter, adpcmCodec, true, f);
+    		        }
+    		        else {
+    		            printf("Audio test without codec, flags=%d...\n", f); fflush(stdout);
+    		            audioTest = new AudioIOTest(common, audioReader, audioWriter, adpcmCodec, false, f);
+    		        }
+    		    }
+                if (audioTest->running) {
+                    audioTest->running = false;
+                    delete audioTest;
+                    audioTest = NULL;
+                }
+                else {
+                    audioTest->start();
+                }
+		    }
+		}
+		else if(!strncmp("m", cmd, 1) || !strncmp("mute", cmd, 4)) {
+            common->audioMute = 1 - common->audioMute; //toggle
+            if(common->audioMute) {
+                printf("Audio muted."); fflush(stdout);
             }
             else {
-                audioTest->start();
-            } 
-		}
+                printf("Audio unmuted."); fflush(stdout);
+            }            
+	    }
+		else if(!strncmp("s", cmd, 1) || !strncmp("sine", cmd, 4)) {
+            common->audioGenTone = 1 - common->audioGenTone; //toggle
+            if(common->audioGenTone) {
+                printf("Transmitting a generated tone..."); fflush(stdout);
+            }
+            else {
+                printf("Transmitting recorded audio..."); fflush(stdout);
+            }
+	    }	    
 		else if(!strncmp("x", cmd, 1) || !strncmp("q", cmd, 1) || !strncmp("quit", cmd, 4) || !strncmp("exit", cmd, 4)) {
 		    //printf("[%s], done...", cmd);
 		    if (audioTest && (audioTest->running)) {
@@ -263,6 +294,8 @@ int VivaVoce::run(void) {
 		memo = common->sipRmg->allocMemo();
 		memo->code = VIVOCE_SIP_BYE;
 		common->signalQ->signalData(memo);
+		printf("\nDisconnecting.\n"); fflush(stdout); 
+		sleep(1);
 	}
 	printf("\nShutting down\n");
 	common->go=0;

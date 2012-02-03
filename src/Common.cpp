@@ -86,6 +86,8 @@ Common::Common() {
 	audrSig = 0;
 	udprSig = 0;
 	audioGo = 0;
+	audioMute = 0;
+	audioGenTone = 0;
 	codecStop = 0;
 }
 

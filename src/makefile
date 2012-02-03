@@ -2,7 +2,8 @@
 # Makes VivaVoce
 #
 
-CFLAGS	= -g -Wall -O3
+CFLAGS	= -Wall -O3
+#CFLAGS	= -g -Wall
 SRC     = VivaVoce.cpp kodek.c UdpRW.cpp SyncQueue.cpp Thread.cpp ResourceManager.cpp AudioRW.cpp 
 OBJ     = $(SRC:.cpp=.o)
 CC	= gcc

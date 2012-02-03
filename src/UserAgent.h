@@ -57,7 +57,7 @@ private:
 
 	SDPConnectionInfo* 	  sdpConnSend;
 	SDPMediaDescription*  sdpMediaSend;
-	SDPMediaDescription*  sdpMediaRecv;
+	//SDPMediaDescription*  sdpMediaRecv;
 	SDPTimeDescription*	  sdpTimeSend;
 
 	int	 sendRequest(int code);

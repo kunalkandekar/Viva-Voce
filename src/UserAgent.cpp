@@ -48,7 +48,7 @@ UserAgent::UserAgent(Common* common):Thread(3, 0, common) {
 
 	sdpConnSend  = new SDPConnectionInfo();
 	sdpMediaSend = new SDPMediaDescription();
-	sdpMediaRecv = NULL;
+	//sdpMediaRecv = NULL;
 	sdpTimeSend  = new SDPTimeDescription();
 }
 
@@ -61,7 +61,7 @@ UserAgent::~UserAgent() {
 
 	delete sdpConnSend;
 	delete sdpMediaSend;
-	delete sdpMediaRecv;
+	//delete sdpMediaRecv;
 	delete sdpTimeSend;
 	
 	if(localId)   free(localId);
@@ -173,7 +173,7 @@ void* UserAgent::run(void* arg) {
 						callId = sipPackRecv->callId;
 						callIdHost = (char*)malloc(strlen(sipPackRecv->callIdHost)+1);
 						sprintf(callIdHost, "%s", sipPackRecv->callIdHost);
-
+                        //memory leak in these mallocs, but fixing them with realloc causes segfaults! for now, waste these ~100 bytes...
 						remoteId = (char*)malloc(strlen(sipPackRecv->contactUri.id)+1);
 						sprintf(remoteId, "%s", sipPackRecv->contactUri.id);
 
@@ -690,7 +690,7 @@ void UserAgent::checkPacket(void) {
 			printf("\n\tSDP: Discarding malformed packet (%d)",ret);
 		}
 		else if(sdpPackRecv->getNumMediaDescriptions()) {
-			sdpMediaRecv = sdpPackRecv->getMediaDescription(0);
+			SDPMediaDescription *sdpMediaRecv = sdpPackRecv->getMediaDescription(0);
 			sdpMediaRecv->transport
 				= strtok_r(sdpMediaRecv->transport," ",&temp);
 			sdpMediaRecv->media

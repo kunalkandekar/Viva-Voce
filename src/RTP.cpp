@@ -34,13 +34,13 @@ int 	RTPPacket::pointData(char *data, int len) {
 
 /** RTCP Packets **/
 RTCPPacket::RTCPPacket() {
+	sendRep=new rtcpSReport();
 	reset();
 }
 
 void RTCPPacket::reset(void) {
 	reportCount=0;
 	rtcpType=-1;		//Invalid
-	sendRep=new rtcpSReport();;
 	isSRepValid=false;
 	version=2;
 	padding=0;
@@ -243,7 +243,7 @@ int RTPPacketFormatter::parseBytes(RTCPPacket *pack, char *msg, int len) {
 
 	offset+=RTCP_FIX_HDR_LEN;
 	if(temp==200) {
-		sRep = new rtcpSReport();
+		//sRep = new rtcpSReport();
 		memcpy(sRep,msg+offset,sizeof(rtcpSReport));
 		sRep->ntpTimestamp1	= ntohl(sRep->ntpTimestamp1);
 		sRep->ntpTimestamp2	= ntohl(sRep->ntpTimestamp2);
@@ -258,7 +258,7 @@ int RTPPacketFormatter::parseBytes(RTCPPacket *pack, char *msg, int len) {
 	}
 
 	for(temp=0; temp < repCount; temp++) {
-		rRep = new rtcpRReport();
+		//rRep = new rtcpRReport();
 		memcpy(rRep,msg+offset,sizeof(rtcpRReport));
 		rRep->SSRC 			= ntohl(rRep->SSRC);
 		rRep->extSeqRecvd	= ntohs(rRep->extSeqRecvd);
