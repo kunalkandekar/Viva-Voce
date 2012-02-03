@@ -17,6 +17,17 @@
 #define SOLARIS 1
 #endif
 
+//forward declarations
+int initAudioInput(Common *common);
+int openAudioInput(Common *common);
+int closeAudioInput(Common *common);
+int cleanupAudioInput(Common *common);
+
+int initAudioOutput(Common *common);
+int openAudioOutput(Common *common);
+int closeAudioOutput(Common *common);
+int cleanupAudioOutput(Common *common);
+
 /**************************** LINUX-specific implementation ****************************/
 #ifdef __linux__
 #include <stropts.h>
@@ -146,14 +157,14 @@ int initAudioLinux(Common* common) {
 		perror ("\n\tError opening AUDIO_DEV for input");
 		return -1;
 	}
+ 	//close again, this was just a test
+ 	close(common->audio_ip);
 
 	if(openAudioOutput(common)  < 0) {
 		perror ("\n\tError opening AUDIO_DEV for output");
 		return -1;
 	}
- 
- 	//close again, this was just a test
- 	close(common->audio_ip);
+  	//close again, this was just a test
  	close(common->audio_op);
 	return 0;
 }
@@ -169,6 +180,15 @@ int closeAudioOutput(Common* common) {
     close(common->audio_op);
     return 0;
 }
+
+int cleanupAudioInput(Common *common) {
+    return 0;
+}
+
+int cleanupAudioOutput(Common *common) {
+    return 0;
+}
+
 #endif
 
 /**************************** OSX-specific implementation ****************************/
@@ -187,11 +207,9 @@ public:
 
 int closeAudioInput(Common *common) {
     CoreAudioInput *coreai = ((CoreAudioInterface*)common->ai)->coreai;
-    if(coreai)
-        delete coreai;
-    ((CoreAudioInterface*)common->ai)->coreai  = NULL;
+    coreai->Stop();
     close(common->audio_ip);
-    common->audio_ip = -1;
+    //common->audio_ip = -1;
     return 0;
 }
 
@@ -204,17 +222,9 @@ int openAudioInput(Common *common) {
     }
     common->audio_ip = fd[0];
     
-    CoreAudioInput *coreai = new CoreAudioInput(fd[1]);
-    ((CoreAudioInterface*)common->ai)->coreai = coreai;
-    if(coreai->ConfigureAudio(common->nChannels, common->sampleRate, 
-                            common->precision, common->nCoding, common->bytesPerCapture) < 0) {
-        //error
+    CoreAudioInput *coreai = ((CoreAudioInterface*)common->ai)->coreai;
+    if(coreai->Start(fd[1]) < 0) {
         closeAudioInput(common);
-        return -1;
-    }
-    
-    //CoreAudioInput *coreai = ((CoreAudioInterface*)common->ai)->coreai;
-    if(coreai->Start() < 0) {
         return -1;
     }
     return 0;
@@ -222,18 +232,23 @@ int openAudioInput(Common *common) {
 
 int initAudioInput(Common *common) {
     //need same for audio output
+    CoreAudioInput *coreai = new CoreAudioInput();
+    ((CoreAudioInterface*)common->ai)->coreai = coreai;
+    if(coreai->ConfigureAudio(common->nChannels, common->sampleRate, 
+                            common->precision, common->nCoding, common->bytesPerCapture) < 0) {
+        //error
+        cleanupAudioInput(common);
+        return -1;
+    }    
     return 0;
 }
 
 int closeAudioOutput(Common* common) {
 	//close audio o/p
     CoreAudioOutput *coreao = ((CoreAudioInterface*)common->ai)->coreao;
-    if (coreao) {
-        delete coreao;
-    }
-    ((CoreAudioInterface*)common->ai)->coreao  = NULL;
+    coreao->Stop();
     close(common->audio_op);
-    common->audio_op = -1;    
+    //common->audio_op = -1;    
     return 0;
 }
 
@@ -246,25 +261,24 @@ int openAudioOutput(Common* common) {
     }
     common->audio_op = fd[1];
 
-    CoreAudioOutput *coreao = new CoreAudioOutput(fd[0]);
-    ((CoreAudioInterface*)common->ai)->coreao = coreao;
-    if(coreao->ConfigureAudio(common->nChannels, common->sampleRate, 
-                            common->precision, common->nCoding, common->bytesPerCapture) < 0) {
-        //error
-        closeAudioOutput(common);
-        return -1;
-    }
-
 	//open audio o/p
-    //CoreAudioOutput *coreao = ((CoreAudioInterface*)common->ai)->coreao;
-    if (coreao->Start() < 0) {
+    CoreAudioOutput *coreao = ((CoreAudioInterface*)common->ai)->coreao;
+    if (coreao->Start(fd[0]) < 0) {
+        closeAudioOutput(common);
         return -1;
     }
     return 0;
 }
 
-int initAudioOutput(Common *common) {    
-    //need same for audio output
+int initAudioOutput(Common *common) {
+    CoreAudioOutput *coreao = new CoreAudioOutput();
+    ((CoreAudioInterface*)common->ai)->coreao = coreao;
+    if(coreao->ConfigureAudio(common->nChannels, common->sampleRate, 
+                            common->precision, common->nCoding, common->bytesPerCapture) < 0) {
+        //error
+        cleanupAudioOutput(common);
+        return -1;
+    }
     return 0;
 }
 
@@ -281,6 +295,23 @@ int initAudioOSX(Common *common) {
         return -1;
     }
     //need same for audio output
+    return 0;
+}
+
+int cleanupAudioInput(Common *common) {
+    CoreAudioInput *coreai = ((CoreAudioInterface*)common->ai)->coreai;
+    if(coreai)
+        delete coreai;
+    ((CoreAudioInterface*)common->ai)->coreai  = NULL;
+    return 0;
+}
+
+int cleanupAudioOutput(Common *common) {
+    CoreAudioOutput *coreao = ((CoreAudioInterface*)common->ai)->coreao;
+    if (coreao) {
+        delete coreao;
+    }
+    ((CoreAudioInterface*)common->ai)->coreao  = NULL;
     return 0;
 }
 
@@ -383,6 +414,15 @@ int closeAudioOutput(Common* common) {
     close(common->audio_op);
     return 0;
 }
+
+int cleanupAudioInput(Common *common) {
+    return 0;
+}
+
+int cleanupAudioOutput(Common *common) {
+    return 0;
+}
+
 #endif
 
 //TODO: Separate out OS-specific stuff into separate files, maybe refactor into class hierarchy
@@ -505,6 +545,7 @@ void* AudioReader::run(void* arg) {
 		}
 	}
 	printf("AudioReader stopped. "); fflush(stdout);
+	cleanupAudioInput(common);	
 	return NULL;
 }
 
@@ -523,8 +564,11 @@ void* AudioWriter::run(void* arg) {
 	int size;
 	int buf;
 	int len;
-	static char golden[169];  //ooh that's deep
-		
+
+	static unsigned char golden[161];  //ooh that's deep
+	static short goldenpcm[161];
+    linear2ulaw(goldenpcm, golden, sizeof(golden));
+
 	while(common->go) {
         if(!common->isConnected && !common->audioGo) {
 		    //drop any memos if we're not playing audio
@@ -552,14 +596,14 @@ void* AudioWriter::run(void* arg) {
                         buf=0;
     					len = memo->data1;
     					if(common->audioMute) {
-    					   size = write(common->audio_op, golden, sizeof(golden));
+    					    size = write(common->audio_op, golden, sizeof(golden));
     					}
     					else while (1) {
     						size = write(common->audio_op, memo->bytes+buf, len);
     
     						if (size < 0) { 
                                 //error, break
-                                perror("write");
+                                perror("AudioWriter::run write");
                                 break;
     						}
     						else if(size == 0) {
@@ -576,7 +620,7 @@ void* AudioWriter::run(void* arg) {
     					}
     					common->unitsPld++;
     					break;
-    
+
     				case VIVOCE_RESPOND:
     					printf("\n\tAudio Writer active"); fflush(stdout);
     					break;
@@ -592,5 +636,6 @@ void* AudioWriter::run(void* arg) {
 		closeAudioOutput(common);
 	}
 	printf("AudioWriter stopped."); fflush(stdout);
+	cleanupAudioOutput(common);
 	return NULL;
 }

@@ -19,15 +19,18 @@ public:
     CoreAudioIOBase();
     virtual ~CoreAudioIOBase();
 
+    // Convenience function to set data format
+    int ConfigureAudioFormat(int nChannels, int sampleRate, int bitsPerSample, const char *nCoding, int bufferSize);
+
     // Convenience function to allocate our audio buffers
     int AllocateAudioBuffers();
 
     // Convenience function to dispose of our audio buffers
     int DestroyAudioBuffers();        
 
-    int ConfigureAudio(int nChannels, int sampleRate, int bitsPerSample, const char *nCoding, int bufferSize);
+    virtual int ConfigureAudio(int nChannels, int sampleRate, int bitsPerSample, const char *nCoding, int bufferSize) = 0;
     
-    virtual int Start() = 0;
+    virtual int Start(int fd) = 0;
     virtual int Stop() = 0;
 
 //member variables
@@ -38,11 +41,13 @@ public:
     SInt64                       mCurrentPacket;
     UInt32                       mCurrentByte;
     bool                         mIsRunning;
+    int pipefd;
+
 };
 
 class CoreAudioInput : public CoreAudioIOBase {
 public:
-    CoreAudioInput(int fd);
+    CoreAudioInput();
     
     ~CoreAudioInput();
     
@@ -60,16 +65,14 @@ public:
 
     int EnqueueBuffers();
     
-    int Start();
+    int ConfigureAudio(int nChannels, int sampleRate, int bitsPerSample, const char *nCoding, int bufferSize);
+    int Start(int fd);
     int Stop();
-
-//member variables
-    int pipefd;
 };
 
 class CoreAudioOutput : public CoreAudioIOBase, Thread {
 public:
-    CoreAudioOutput(int fd);
+    CoreAudioOutput();
     
     ~CoreAudioOutput();
     
@@ -84,12 +87,12 @@ public:
                                     AudioQueueBufferRef  inBuffer);
     int PrimeBuffers();
 
-    int Start();
+    int ConfigureAudio(int nChannels, int sampleRate, int bitsPerSample, const char *nCoding, int bufferSize);
+    int Start(int fd);
     int Stop();
 
     void *run(void *arg);
 //member variables
-    int pipefd;
     UInt32 mNumPacketsToRead;
     AudioStreamPacketDescription  *mPacketDescs;
 };
