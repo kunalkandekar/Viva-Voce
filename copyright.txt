@@ -1,5 +1,5 @@
 All code authored by Kunal Kandekar (unless specified otherwise.)
-Copyright 2001 - 2011
+Copyright 2003 - 2012
 
 License: Undecided as yet. If you find this code somehow, and want to use it for
 some insane reason, feel free to do so for non-commercial/private use, but 
