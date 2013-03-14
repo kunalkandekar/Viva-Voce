@@ -4,7 +4,7 @@ static const char* SDPFields 		= "vosiuepcbtrzkamicbka";
 static const char* SDPMediaFields	= "micbka";
 //static const char* SDPTimeFields	= "tr";
 
-#define debug //printf
+#define debug(...) if(0)printf(__VA_ARGS__)
 
 /**************** Connection Descriptor ****************************/
 SDPConnectionInfo::SDPConnectionInfo() {

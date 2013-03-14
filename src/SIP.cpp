@@ -2,7 +2,7 @@
 
 
 #define CMP strcasecmp
-#define debug //printf
+#define debug(...) if(0)printf(__VA_ARGS__)
 
 /*********************  CONVENIENCE METHODS *************************/
 void parseURI(URI* uri, char* line) {
