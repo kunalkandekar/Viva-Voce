@@ -3,7 +3,7 @@
 
 #include "SyncQueue.h"
 
-#pragma pack(1)
+//#pragma pack(1)
 
 typedef struct Memo {
 	short id;
@@ -14,7 +14,7 @@ typedef struct Memo {
 	int size;
 } Memo;
 
-#pragma pack(4)
+//#pragma pack(4)
 
 class ResourceManager { //:public Thread{
 private:
