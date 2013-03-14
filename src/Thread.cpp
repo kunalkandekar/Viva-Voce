@@ -312,10 +312,6 @@ int MyEvent::Wait(long timeoutInMilliSec)
 
 #ifdef WIN32
 	err=WaitForSingleObject(event, timeoutInMilliSec);
-	if(err==WAIT_ABANDONED)
-	{
-		err=WaitForSingleObject(event, timeoutInMilliSec);
-	}
 	if(err!=WAIT_OBJECT_0)
 		ret=EVT_TIMEDOUT;
 #else
