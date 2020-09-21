@@ -1,4 +1,5 @@
 #include "ResourceManager.h"
+#include <stdlib.h>
 
 ResourceManager::ResourceManager(int init, int size) {
 	memoQ =  new SyncQueue();
